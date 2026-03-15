@@ -20,6 +20,7 @@ export const agentApi = {
      */
     send2Agent: (
         agentId: string,
+        url: string,
         data: Record<string, unknown>,
         config: AgentConfig = {},
         options: RequestInit = {},
@@ -28,7 +29,7 @@ export const agentApi = {
         headers.set("Content-Type", "application/json");
 
         return post<Send2AgentResponse>(
-            `/chat/agent/${agentId}/run`,
+            url,
             JSON.stringify({ ...data, ...config }),
             {
                 ...options,

@@ -5,53 +5,22 @@
     </header>
 
     <div ref="messageListRef" class="chat-body">
-      <!-- <div v-if="messages.length === 0" class="empty-state">
-        <div class="sparkle-icon-container">
-          <Sparkles :size="30" class="sparkle-icon" />
-        </div>
-        <h4 class="welcome-title">Start a conversation</h4>
-        <p class="welcome-desc">Ask directly. Keep context minimal, iterate later.</p>
-
-        <div class="suggestion-list">
-          <button class="suggestion-item suggestion-blue"
-            @click="applySuggestion('Summarize this project in 3 bullets')">
-            <div class="suggestion-icon bg-blue">
-              <MessageSquare :size="16" />
-            </div>
-            <span>Summarize the project</span>
-          </button>
-          <button class="suggestion-item suggestion-orange"
-            @click="applySuggestion('Give me one next action for this codebase')">
-            <div class="suggestion-icon bg-orange">
-              <Zap :size="16" />
-            </div>
-            <span>One next action</span>
-          </button>
-        </div>
-      </div> -->
-
-      <!-- <template v-else>
-        <div v-for="(msg, index) in messages" :key="`${msg.role}-${index}`" class="message-row"
-          :class="msg.role === 'user' ? 'message-row-user' : ''">
-          <div v-if="msg.role === 'assistant'" class="avatar-container">
-            <Sparkles :size="14" />
-          </div>
+      <template v-if="messages.length > 0">
+        <div v-for="(msg, index) in messages" :key="`msg-${index}`" class="message-row">
           <div class="message-bubble-wrapper">
-            <div class="message-bubble" :class="msg.role === 'assistant' ? 'assistant-bubble' : 'user-bubble'">
+            <div class="message-bubble assistant-bubble">
               <p>{{ msg.content }}</p>
             </div>
           </div>
         </div>
-      </template> -->
+      </template>
     </div>
 
     <footer class="chat-footer">
       <div class="input-container">
         <div v-if="files.length > 0" class="attachment-strip">
-          <div v-for="(file, index) in files" :key="fileKey(file, index)" class="attachment-item">
-            <img v-if="isImageFile(file)" :src="previewMap[fileKey(file, index)]" :alt="file.name"
-              class="attachment-thumb" />
-            <div v-else class="attachment-file-fallback">
+          <div v-for="(file, index) in files" :key="fileKey(file, index)" class="attachment-item" :title="file.name">
+            <div class="attachment-file-fallback">
               <Paperclip :size="12" />
             </div>
             <button type="button" class="attachment-remove-btn" @click="removeFile(index)">x</button>
@@ -59,7 +28,7 @@
         </div>
 
         <textarea ref="textareaRef" v-model="inputText" class="chat-textarea" placeholder="let's design" rows="2"
-          @input="autoResize" @keydown="onInputKeydown" />
+          @input="autoResize" />
 
         <div class="input-actions-bar">
           <div class="left-actions">
@@ -102,28 +71,24 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { nextTick, ref } from "vue";
 import {
   ArrowUp,
   Check,
-  MessageSquare,
   Paperclip,
 
   SlidersHorizontal,
-  Sparkles,
-  Zap,
 } from "lucide-vue-next";
 import { agentApi } from "@/api/agent";
 
-// type ChatMessage = {
-//   role: "user" | "assistant";
-//   content: string;
-// };
+type ChatMessage = {
+  content: string;
+};
 
 const agentId = "default";
 const modelOptions = ["Gemini", "GPT-4o", "Claude 3.7"];
 
-// const messages = ref<ChatMessage[]>([]);
+const messages = ref<ChatMessage[]>([]);
 const inputText = ref("");
 const sending = ref(false);
 const selectedModel = ref(modelOptions[0]);
@@ -134,16 +99,9 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
 const files = ref<File[]>([]);
-const previewMap = ref<Record<string, string>>({});
 
 const fileKey = (file: File, index: number) =>
   `${file.name}-${file.size}-${file.lastModified}-${index}`;
-const isImageFile = (file: File) => file.type.startsWith("image/");
-
-const applySuggestion = (text: string) => {
-  inputText.value = text;
-  textareaRef.value?.focus();
-};
 
 const autoResize = () => {
   const el = textareaRef.value;
@@ -176,71 +134,50 @@ const removeFile = (index: number) => {
   files.value.splice(index, 1);
 };
 
-watch(
-  files,
-  (nextFiles) => {
-    const nextMap: Record<string, string> = {};
-    nextFiles.forEach((file, index) => {
-      if (!isImageFile(file)) return;
-      nextMap[fileKey(file, index)] = URL.createObjectURL(file);
-    });
-    Object.values(previewMap.value).forEach((url) => URL.revokeObjectURL(url));
-    previewMap.value = nextMap;
-  },
-  { deep: true },
-);
-
-onBeforeUnmount(() => {
-  Object.values(previewMap.value).forEach((url) => URL.revokeObjectURL(url));
-});
-
 const sendMessage = async () => {
-  console.log("xxxxxxxxxxxxxxxxxxxxxxxxxxxx");
-  console.log(inputText.value);
-  console.log("xxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+  messages.value.push({ content: inputText.value });
+  inputText.value = "";
+  await nextTick();
+  autoResize();
+  const response = await agentApi.send2Agent(agentId, "http://localhost:8000/api/chatagent/default/run", { messages: messages.value })
+  console.log(response);
+}
 
-  const text = inputText.value.trim();
-  if (!text || sending.value) return;
 
-  // const userMessage: ChatMessage = { role: "user", content: text };
-  // messages.value.push(userMessage);
-  // inputText.value = "";
-  // files.value = [];
-  // autoResize();
-  // await scrollToBottom();
+//   const text = inputText.value.trim();
+//   if (!text || sending.value) return;
 
-  // sending.value = true;
-  // modelMenuOpen.value = false;
+//   messages.value.push({ content: text });
+//   inputText.value = "";
+//   files.value = [];
+//   autoResize();
+//   await scrollToBottom();
 
-  // try {
-  //   const response = await agentApi.send2Agent(
-  //     agentId,
-  //     { messages: messages.value },
-  //     { model: selectedModel.value, stream: false },
-  //   );
+//   sending.value = true;
+//   modelMenuOpen.value = false;
 
-  //   messages.value.push({
-  //     role: "assistant",
-  //     content: response.content || "No response",
-  //   });
-  // } catch {
-  //   messages.value.push({
-  //     role: "assistant",
-  //     content: "Request failed. Check server and try again.",
-  //   });
-  // } 
-  // finally {
-  //   sending.value = false;
-  //   await scrollToBottom();
-  // }
-};
+//   try {
+//     const response = await agentApi.send2Agent(
+//       agentId,
+//       { messages: messages.value },
+//       { model: selectedModel.value, stream: false },
+//     );
 
-const onInputKeydown = (event: KeyboardEvent) => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    void sendMessage();
-  }
-};
+//     messages.value.push({ content: response.content || "No response" });
+//   } catch {
+//     messages.value.push({ content: "Request failed. Check server and try again." });
+//   } finally {
+//     sending.value = false;
+//     await scrollToBottom();
+//   }
+// };
+
+// const onInputKeydown = (event: KeyboardEvent) => {
+//   if (event.key === "Enter" && !event.shiftKey) {
+//     event.preventDefault();
+//     void sendMessage();
+//   }
+// };
 </script>
 <style scoped>
 @reference "tailwindcss";
@@ -394,7 +331,10 @@ const onInputKeydown = (event: KeyboardEvent) => {
 
 
 .chat-textarea {
-  @apply m-1 mb-1 flex-1 mx-0 resize-none self-stretch border-0 bg-transparent px-3 pt-3 text-slate-900 outline-none;
+  @apply m-1 mb-1 mx-0 resize-none border-0 bg-transparent px-3 pt-3 text-slate-900 outline-none;
+  min-height: 44px;
+  max-height: 180px;
+  overflow-y: hidden;
   font-size: 15px;
   line-height: 20px;
   font-weight: 400;

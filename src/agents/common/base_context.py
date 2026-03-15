@@ -9,7 +9,7 @@ class BaseContext:
     """
 
     system_prompt: str = ""
-    tool: list = []
+    tool: list = field(default_factory=list)
 
     model: str = field(default=sys_config.default_model)
 

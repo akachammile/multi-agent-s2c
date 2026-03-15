@@ -8,7 +8,7 @@ from .context import DeepAgentContext
 
 class DeepAgent(BaseAgent):
 
-    name = "deep_agent"
+    name = "deepagents"
     description = "深度代理"
     context = DeepAgentContext
 

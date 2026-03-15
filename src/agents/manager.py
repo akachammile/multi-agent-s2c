@@ -28,17 +28,14 @@ class AgentManager:
         Returns:
             _type_: agent instance
         """
+        print("xxxxxxxxxxxxxxxxxxxxxxx")
+        print(self._instances)
+        print("xxxxxxxxxxxxxxxxxxxxxxx")
+
         if agent_id in self._instances:
             return self._instances[agent_id]
 
 
-# if __name__ == "__main__":
-#     instances = {}
-#     agent_dir = Path(__file__).parent
-#     for path in agent_dir.iterdir():
-#         if path.is_dir() and path.name not in ("common", "__pycache__"):
-#             agent_module = importlib.import_module(f"src.agents.{path.name}")
-#             for name, obj in inspect.getmembers(agent_module):
-#                 if inspect.isclass(obj) and issubclass(obj, BaseAgent):
-#                     instances[name] = obj()
-# print(instances)
+agent_manager = AgentManager()
+__all__ = ["agent_manager"]
+    

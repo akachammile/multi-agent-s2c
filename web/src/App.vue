@@ -3,7 +3,6 @@ import SidebarComponent from "@/components/SidebarComponent.vue"
 import AgentComponent from "@/components/AgentComponent.vue"
 import GridCanvas from "@/components/GridCanvas.vue"
 import DynamicIsland from "@/components/DynamicIsland.vue"
-import Test from "@/components/test.vue";
 
 </script>
 

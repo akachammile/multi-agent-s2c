@@ -30,4 +30,5 @@ class BaseAgent:
         流式输出后处理
         """
 
-        pass
+        response = self.get_agent.stream(messages, context)
+        print(response)

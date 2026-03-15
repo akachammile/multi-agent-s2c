@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from src.agents import agent_manager
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -8,7 +9,6 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 class ChatRequest(BaseModel):
     messages: list[dict] = Field(..., description="对话消息列表")
     model: str | None = Field(default=None, description="指定模型")
-    stream: bool = Field(default=True, description="是否流式输出")
 
 
 class ChatResponse(BaseModel):
@@ -17,15 +17,13 @@ class ChatResponse(BaseModel):
 
 
 @router.post("agent/{agent_id}/run")
-async def chat(request: ChatRequest):
+async def chat(agent_id: str, request: ChatRequest):
     """对话接口，支持流式/非流式"""
-    if request.stream:
-        return StreamingResponse(
-            _stream_chat(request),
-            media_type="text/event-stream",
-        )
+    agent = agent_manager.get_agent("deepagents")
+    print(type(agent))
+    agent.stream({"messages": "xxxxx"})
 
-    return ChatResponse(content="not implemented", model=request.model or "default")
+    return response
 
 
 async def _stream_chat(request: ChatRequest):
