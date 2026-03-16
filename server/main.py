@@ -10,16 +10,13 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.agents import agent_manager
-from router.chat import router as chat_router
+from server.router import api_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Place startup initialization logic here.
     print("FastAPI service started.")
     yield
-    # Place shutdown cleanup logic here.
     print("FastAPI service stopped.")
 
 
@@ -42,12 +39,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(chat_router, prefix="/api")
+app.include_router(api_router, prefix="/api")
 
-
-@app.get("/", tags=["health"])
-async def health_check():
-    return {"status": "ok"}
 
 
 if __name__ == "__main__":

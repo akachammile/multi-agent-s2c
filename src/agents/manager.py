@@ -28,10 +28,6 @@ class AgentManager:
         Returns:
             _type_: agent instance
         """
-        print("xxxxxxxxxxxxxxxxxxxxxxx")
-        print(self._instances)
-        print("xxxxxxxxxxxxxxxxxxxxxxx")
-
         if agent_id in self._instances:
             return self._instances[agent_id]
 
@@ -39,3 +35,5 @@ class AgentManager:
 agent_manager = AgentManager()
 __all__ = ["agent_manager"]
     
+if __name__ == "__main__":
+    pass

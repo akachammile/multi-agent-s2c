@@ -1,7 +1,6 @@
 from abc import abstractmethod
-
 from .base_context import BaseContext
-
+from langgraph.graph.state import CompiledStateGraph
 
 class BaseAgent:
     name: str = "base_agent"
@@ -19,16 +18,16 @@ class BaseAgent:
         return f"{self.module_name}_{self.name}"
 
     @abstractmethod
-    def get_agent(self):
+    async def get_agent(self) -> CompiledStateGraph:
         """
         获取agent, 需子类重写
         """
         pass
 
-    def stream(self, messages, context=None, **kwargs):
+    async def stream(self, messages, context=None, **kwargs):
         """
         流式输出后处理
         """
-
-        response = self.get_agent.stream(messages, context)
-        print(response)
+        agent = self.get_agent()
+        response = await agent.ainvoke(messages, context)
+        return response
