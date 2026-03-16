@@ -1,8 +1,13 @@
-export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export async function http<T = unknown>(
+  url: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const response = await fetch(url, init);
 
-export type RequestOptions = RequestInit;
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
 
-async function parseResponse<T>(response: Response): Promise<T> {
   if (response.status === 204) {
     return undefined as T;
   }
@@ -16,56 +21,20 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return (await response.text()) as T;
 }
 
-export async function request<T = unknown>(
-  method: HttpMethod,
-  url: string,
-  options: RequestOptions = {},
-): Promise<T> {
-  const { body, headers, ...rest } = options;
-  const requestHeaders = new Headers(headers);
 
-  const response = await fetch(url, {
-    ...rest,
-    method,
-    headers: requestHeaders,
-    body: method === "GET" ? undefined : body ?? undefined,
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  return parseResponse<T>(response);
+export async function post<T = unknown>(url: string, init: RequestInit = {}): Promise<T> {
+  return http<T>(url, { ...init, method: "POST" });
 }
 
-export function get<T = unknown>(url: string, options?: Omit<RequestOptions, "body">) {
-  return request<T>("GET", url, options);
+export async function get<T = unknown>(url: string, init: RequestInit = {}): Promise<T> {
+  return http<T>(url, { ...init, method: "GET" });
 }
 
-export function post<T = unknown>(
-  url: string,
-  body?: RequestOptions["body"],
-  options?: Omit<RequestOptions, "body">,
-) {
-  return request<T>("POST", url, { ...options, body });
+export async function put<T = unknown>(url: string, init: RequestInit = {}): Promise<T> {
+  return http<T>(url, { ...init, method: "PUT" });
 }
 
-export function put<T = unknown>(
-  url: string,
-  body?: RequestOptions["body"],
-  options?: Omit<RequestOptions, "body">,
-) {
-  return request<T>("PUT", url, { ...options, body });
-}
+export async function del<T = unknown>(url: string, init: RequestInit = {}): Promise<T> {
+  return http<T>(url, { ...init, method: "DELETE" });
+} 
 
-export function patch<T = unknown>(
-  url: string,
-  body?: RequestOptions["body"],
-  options?: Omit<RequestOptions, "body">,
-) {
-  return request<T>("PATCH", url, { ...options, body });
-}
-
-export function del<T = unknown>(url: string, options?: Omit<RequestOptions, "body">) {
-  return request<T>("DELETE", url, options);
-}

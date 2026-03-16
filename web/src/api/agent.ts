@@ -1,4 +1,4 @@
-import { post } from "./index";
+import { http } from "./index";
 
 type AgentConfig = {
     model?: string;
@@ -25,15 +25,18 @@ export const agentApi = {
         config: AgentConfig = {},
         options: RequestInit = {},
     ) => {
-        const headers = new Headers(options.headers);
+        const { signal, headers: extraHeaders, ...restOptions } = options ?? {};
+        const headers = new Headers(extraHeaders);
         headers.set("Content-Type", "application/json");
 
-        return post<Send2AgentResponse>(
+        return http<Send2AgentResponse>(
             url,
-            JSON.stringify({ ...data, ...config }),
             {
-                ...options,
+                ...restOptions,
+                signal,
+                method: "POST",
                 headers,
+                body: JSON.stringify({ ...data, ...config }),
             },
         );
     },

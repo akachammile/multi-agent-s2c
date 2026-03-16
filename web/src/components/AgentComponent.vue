@@ -76,7 +76,6 @@ import {
   ArrowUp,
   Check,
   Paperclip,
-
   SlidersHorizontal,
 } from "lucide-vue-next";
 import { agentApi } from "@/api/agent";
@@ -139,38 +138,15 @@ const sendMessage = async () => {
   inputText.value = "";
   await nextTick();
   autoResize();
-  const response = await agentApi.send2Agent(agentId, "http://localhost:8000/api/chatagent/default/run", { messages: messages.value })
-  console.log(response);
+  const response = await agentApi.send2Agent(agentId, "http://localhost:6547/api/chat/agent/default/run", { messages: messages.value })
+  console.log(response.content);
+  
+  if (response.content) {
+    messages.value.push({ content: response.content});
+  }
+ 
 }
 
-
-//   const text = inputText.value.trim();
-//   if (!text || sending.value) return;
-
-//   messages.value.push({ content: text });
-//   inputText.value = "";
-//   files.value = [];
-//   autoResize();
-//   await scrollToBottom();
-
-//   sending.value = true;
-//   modelMenuOpen.value = false;
-
-//   try {
-//     const response = await agentApi.send2Agent(
-//       agentId,
-//       { messages: messages.value },
-//       { model: selectedModel.value, stream: false },
-//     );
-
-//     messages.value.push({ content: response.content || "No response" });
-//   } catch {
-//     messages.value.push({ content: "Request failed. Check server and try again." });
-//   } finally {
-//     sending.value = false;
-//     await scrollToBottom();
-//   }
-// };
 
 // const onInputKeydown = (event: KeyboardEvent) => {
 //   if (event.key === "Enter" && !event.shiftKey) {
