@@ -1,73 +1,5 @@
 <template>
-  <section class="chat-panel glass-panel rounded-panel">
-    <header class="chat-header">
-      <h3 class="chat-title">New Chat</h3>
-    </header>
-<!-- 
-    <div ref="messageListRef" class="chat-body">
-      <template v-if="messages.length > 0">
-        <div v-for="(msg, index) in messages" :key="`msg-${index}`" class="message-row">
-          <div class="message-bubble-wrapper">
-            <div class="message-bubble assistant-bubble">
-              <p>{{ msg.content }}</p>
-            </div>
-          </div>
-        </div>
-      </template>
-    </div> -->
 
-    <footer class="chat-footer">
-      <div class="input-container">
-        <div v-if="files.length > 0" class="attachment-strip">
-          <div v-for="(file, index) in files" :key="fileKey(file, index)" class="attachment-item" :title="file.name">
-            <div class="attachment-file-fallback">
-              <Paperclip :size="12" />
-            </div>
-            <button type="button" class="attachment-remove-btn" @click="removeFile(index)">x</button>
-          </div>
-        </div>
-
-        <textarea ref="textareaRef" v-model="inputText" class="chat-textarea" placeholder="let's design" rows="2"
-          @input="autoResize" />
-
-        <div class="input-actions-bar">
-          <div class="left-actions">
-            <input ref="fileInputRef" type="file" class="hidden-file-input" multiple @change="onFileChange" />
-            <button type="button" class="action-btn" title="Add files" @click="pickFiles">
-              <Paperclip :size="16" />
-            </button>
-          </div>
-
-          <div class="right-actions">
-            <div class="model-picker">
-              <button type="button" class="action-btn" title="Select model" @click="modelMenuOpen = !modelMenuOpen">
-                <SlidersHorizontal :size="16" />
-              </button>
-
-              <Transition name="model-pop">
-                <div v-if="modelMenuOpen" class="model-popover">
-                  <button v-for="model in modelOptions" :key="model" type="button" class="model-pill"
-                    :class="selectedModel === model ? 'model-pill-active' : ''"
-                    @click="selectedModel = model; modelMenuOpen = false">
-                    <span class="model-pill-icon">{{ model.charAt(0) }}</span>
-                    <span class="model-pill-name">{{ model }}</span>
-                    <span class="model-pill-check" :class="selectedModel === model ? 'is-checked' : ''">
-                      <Check :size="12" />
-                    </span>
-                  </button>
-                </div>
-              </Transition>
-            </div>
-
-            <button type="button" class="send-btn" :class="inputText.trim() && !sending ? 'send-btn-active' : ''"
-              :disabled="!inputText.trim() || sending" @click="sendMessage">
-              <ArrowUp :size="18" :stroke-width="2.5" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </footer>
-  </section>
 </template>
 
 <script setup lang="ts">
@@ -140,11 +72,11 @@ const sendMessage = async () => {
   autoResize();
   const response = await agentApi.send2Agent(agentId, "http://localhost:6547/api/chat/agent/default/run", { messages: messages.value })
   console.log(response.content);
-  
+
   if (response.content) {
-    messages.value.push({ content: response.content});
+    messages.value.push({ content: response.content });
   }
- 
+
 }
 
 
