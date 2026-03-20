@@ -1,4 +1,19 @@
 <template>
+  <AgentMessageInputArea>
+    <template #top>
+      <ImagePreviewPart>
+
+      </ImagePreviewPart>
+    </template>
+
+    <template #attachmentOption>
+      <AttachmentPart>
+
+      </AttachmentPart>
+    </template>
+
+
+  </AgentMessageInputArea>
 
 </template>
 
@@ -11,6 +26,9 @@ import {
   SlidersHorizontal,
 } from "lucide-vue-next";
 import { agentApi } from "@/api/agent";
+import AgentMessageInputArea from "./AgentMessageInputArea.vue";
+import ImagePreviewPart from "./ImagePreviewPart.vue";
+import AttachmentPart from "./AttachmentPart.vue";
 
 type ChatMessage = {
   content: string;
