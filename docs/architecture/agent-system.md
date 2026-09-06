@@ -55,20 +55,19 @@ agent 运行上下文只来自：
 | 模型、工具和后端装配 | 具体 Agent 包、`src/model/`、Agent backend | 在 Agent 边界组装；数据库、队列和对象存储仍由外层拥有 |
 
 `AgentManager` 负责发现公共和内部 Agent，内部 Agent 不进入公共对话 Agent 列表。
-`SearchAgent`、`CitationAgent`、`OutlineAgent` 的专门行为属于各自 Agent 能力，不在
+`SearchAgent`、`CitationAgent` 的专门行为属于各自 Agent 能力，不在
 本架构文档重复展开。
 
 ## 7. Implementation Invariants
 
 - 标准内部 Agent 包由 `__init__.py`、`agent.py`、`prompt.py`、`context.py` 和
   `state.py` 组成；只有存在真实包内行为时才增加 `tools.py` 或 `middleware.py`。
-- `SearchAgent` 和 `OutlineAgent` 的现有位置只有在明确批准的结构重构中才能移动，
+- 内部 Agent 的现有位置只有在明确批准的结构重构中才能移动，
   不为未来想法创建空模块。
 - `BaseAgent.stream_messages(...)` 使用 LangGraph `astream(...)`；事件流入口使用
   `astream_events(version="v3")` 并转发 `messages` channel 的 `params.data`。
 - `LeaderAgent` 的基础 Prompt 保持领域中立；专业行为放在工具、内部 Agent 或运行上下文。
 - `SearchAgent` 只做有界查询规划、检索、来源比较和证据综合，并保持为
-  `LeaderAgent` 的可选能力；`CitationAgent` 只校验调用方提供的声明和来源；
-  `OutlineAgent` 只产生有界的父流程大纲产物。
+  `LeaderAgent` 的可选能力；`CitationAgent` 只校验调用方提供的声明和来源。
 - Agent 运行配置只有具体 context、当前 Run 提供的值和后端加载的值三类来源；
   不增加模块全局配置、中间件私有默认值或平行关键字参数。
