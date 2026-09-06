@@ -563,13 +563,17 @@ def _reslove_agent_state(agent_state: dict):
 
 
 def _reslove_interrupt_state(interrupt_chunk):
-    interrupt_payload = json.load(interrupt_chunk)
+    try:
+        interrupt_payload = json.loads(interrupt_chunk)
+    except (TypeError, ValueError):
+        return "interrupted", "等待交互中"
     status = interrupt_payload.get("status", "interrupted")
-    questions = interrupt_payload.get("questions")
+    questions = interrupt_payload.get("pending_interrupt", {}).get("questions")
     if questions and isinstance(questions, list) and isinstance(questions[0], dict):
-        question = questions[0].get("question").strip()
-        if question:
-            return status, question
+        question = questions[0].get("question")
+        if isinstance(question, str) and question.strip():
+            return status, question.strip()
+    
     return status, interrupt_payload.get("message", " 用户需回答")
 
 
@@ -1063,7 +1067,7 @@ def build_agent_interrupt_message(
     ask_human = _build_ask_human_interrupt(
         interrupt_payload, thread_id=thread_id, run_id=run_id
     )
-    return {"status": "ask_human", "interrupt_payload": ask_human.model_dump()}
+    return {"status": "ask_human", **asdict(ask_human)}
 
 
 def _reslove_agent_interrupt(agent_state) -> Any | None:
@@ -1073,7 +1077,8 @@ def _reslove_agent_interrupt(agent_state) -> Any | None:
         for task in agent_state.tasks:
             if hasattr(task, "interrupts") and task.interrupts:
                 return task.interrupts[0]
-    return None
+    else:
+        return None
 
 
 # FIXEME: interrupt 只从 checkpoint StateSnapshot.interrupts 判断。
@@ -1284,7 +1289,23 @@ async def stream_agent_response(
             interrupt_type, interrupt_message = _reslove_interrupt_state(
                 interrupt_chunk
             )
-            yield chunk
+            yield interrupt_chunk
+
+        # finish之前先save所有的的信息
+        try:
+            await save_message_from_langgraph_state(
+                thread_id=thread_id,
+                run_id=runtime_metadata.get("run_id"),
+                context=agent_context,
+                agent_instance=agent_instance,
+                db=db
+
+            )
+        except Exception as e:
+            logger.exception(f"保存信息出错:{e}")
+            yield make_agent_stream_event(
+                status="error"
+            )
 
         yield make_agent_stream_event(
             status="finished",

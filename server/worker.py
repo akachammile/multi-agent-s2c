@@ -344,7 +344,8 @@ def map_stream_event(chunk: dict[str, Any]) -> tuple[str, Any]:
     if status == "finished":
         return "end", {"status": "completed", "chunk": chunk}
 
-    raise ValueError(f"不支持的流事件状态：{status}")
+    # raise ValueError(f"不支持的流事件状态：{status}")
+    return "custom"
 
 
 class StreamEventSmoother:
