@@ -1,18 +1,41 @@
+from typing import Annotated
+
 from langchain_core.tools import tool
 from langgraph.types import interrupt
+from pydantic import BaseModel, Field
 
 
-# FIXEME: 第一版只支持由模型生成 question/options 的单选 ask_user。
+class QuestionOption(BaseModel):
+    """供用户选择的答案。"""
+
+    label: str = Field(description="用户看到的选项文字")
+    value: str = Field(description="回答时使用的选项值")
+
+
+class HumanQuestion(BaseModel):
+    """Agent 生成的一道澄清问题。"""
+
+    question_id: str = Field(description="本次提问内唯一的问题标识")
+    question: str = Field(description="需要用户回答的具体问题")
+    options: list[QuestionOption] = Field(description="针对该问题生成的可选答案")
+
+
 @tool
-def ask_user(question: str, options: list[str]) -> str:
-    """当继续执行必须由用户从明确选项中选择时，暂停并向用户提问。"""
+def ask_user(
+    questions: Annotated[
+        list[HumanQuestion],
+        "本次需要用户回答的问题列表。将可一起回答的独立问题合并提交，每个问题提供明确选项。",
+    ],
+) -> dict[str, str]:
+    """缺少影响任务执行的关键信息，或需要用户选择方案时，暂停并向用户提问。
 
-    return str(
-        interrupt(
-            {
-                "kind": "ask_user",
-                "question": question,
-                "options": options,
-            }
-        )
+    根据任务生成具体问题和清晰的选项，不询问已有上下文能确定的信息。
+    将当前能一起回答的独立问题放在同一次调用中；依赖前一答案的问题留待之后询问。
+    返回按 question_id 对应的用户答案，答案使用选项的 value。
+    """
+    return interrupt(
+        {
+            "kind": "ask_user",
+            "questions": [question.model_dump() for question in questions],
+        }
     )

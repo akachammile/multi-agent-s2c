@@ -3,6 +3,7 @@ import binascii
 import json
 import uuid
 from collections.abc import AsyncIterator, Callable
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.service.input_message_service import AgentInputMsg
 from server.utils.auth import AuthenticatedUser
+from server.utils.interrupt_utils import AskHumanPayload, parse_interrupt_questions
 from src.agents import BaseAgent, agent_manager
 from src.agents import CustomAgentState as AgentState
 from src.database import (
@@ -23,6 +25,7 @@ from src.database import (
     Message,
     MessageAttachment,
     User,
+    postgres_manager,
 )
 from src.database.repositories import (
     AgentRepository,
@@ -168,11 +171,15 @@ async def get_thread_detail(
     )
     pending_interaction = None
     if pending_interaction_run is not None:
-        interrupt_value = dict(
-            pending_interaction_run.run_metadata or {}
-        ).get("interrupt")
+        interrupt_value = dict(pending_interaction_run.run_metadata or {}).get(
+            "interrupt"
+        )
         pending_interaction = {
-            **build_agent_interrupt_message(interrupt_value),
+            **build_agent_interrupt_message(
+                interrupt_value,
+                thread_id=str(pending_interaction_run.thread_id),
+                run_id=str(pending_interaction_run.id),
+            ),
             "parent_run_id": str(pending_interaction_run.id),
         }
     attachment_rows = await MessageAttachmentRepository(
@@ -500,7 +507,6 @@ async def _build_agent_runtime_context(
     """
     agent_runtime_context = {}
 
-
     # 根据当前用户的传递内容填填充上下文
     agent_runtime_context.update(
         {
@@ -554,6 +560,17 @@ def _assign_stream_msg_id(
 def _reslove_agent_state(agent_state: dict):
     agent_result: AgentState = {"agent_todo": list(agent_state.get("todos") or [])}
     return agent_result
+
+
+def _reslove_interrupt_state(interrupt_chunk):
+    interrupt_payload = json.load(interrupt_chunk)
+    status = interrupt_payload.get("status", "interrupted")
+    questions = interrupt_payload.get("questions")
+    if questions and isinstance(questions, list) and isinstance(questions[0], dict):
+        question = questions[0].get("question").strip()
+        if question:
+            return status, question
+    return status, interrupt_payload.get("message", " 用户需回答")
 
 
 def _lc_message_v2_dispather(
@@ -722,9 +739,72 @@ def _serialize_agent_state(agent_state: AgentState | None) -> str:
     except Exception:
         return str(agent_state)
 
-async def save_interrupt_message():
-    # 保存发生错误/主动打断/等产生的消息
-    pass
+
+async def save_interrupt_message(
+    *,
+    db: AsyncSession,
+    thread_id: str,
+    uid: str,
+    accumulated_msg: str,
+    error: str,
+    error_type: str,
+    agent_run_id: str | None,
+    request_id: str | None = None,
+):
+    agent_run_repo = AgentRunRepository(db)
+    conv_repo = ConversationRepository(db)
+
+    try:
+        # 保存发生错误/主动打断/等产生的消息
+        agent_metadata = {
+            "error": error or "错了",
+            "error_type": error_type,
+        }
+
+        # 判断是否有堆积预防消息
+        if accumulated_msg:
+            accumulated_msg = (
+                accumulated_msg.model_dump()
+                if hasattr(accumulated_msg, "model_dump")
+                else {}
+            )
+            accumulated_content = (
+                accumulated_msg.content
+                if hasattr(accumulated_msg, "content")
+                else str(accumulated_msg)
+            )
+            agent_metadata = accumulated_msg or agent_metadata
+        else:
+            accumulated_content = ""
+
+        # save msg 到 database
+        if agent_run_id:
+            agent_run = agent_run_repo.lock_for_output_update(agent_run_id)
+
+            if agent_run is None:
+                raise ValueError(f"当前agent_run_id不存在：{agent_run_id}")
+
+        message = await conv_repo.add_message_by_thread_id(
+            thread_id=thread_id,
+            user_id=uid,
+            agent_run_id=agent_run_id,
+            content=accumulated_content,
+            role="ai",
+            msg_metadata=agent_metadata,
+        )
+
+        if agent_run_id and message:
+            await agent_run_repo.set_output_message(
+                run_id=agent_run_id,
+                output_message_id=int(message.id),
+            )
+            await db.commit()
+        return message
+    except Exception as e:
+        logger.exception(f"保存agent中断消息失败: {e}")
+        await db.rollback()
+        return None
+
 
 async def save_ai_message(
     *,
@@ -903,42 +983,111 @@ async def save_message_from_langgraph_state(
     await db.commit()
 
 
-# FIXEME: ask_user interrupt 只接受当前第一版的单问题、非空单选合同。
-def build_agent_interrupt_message(interrupt_value: Any) -> dict[str, Any]:
-    if not isinstance(interrupt_value, dict):
-        raise ValueError("Agent interrupt value 必须是对象")
-    if interrupt_value.get("kind") != "ask_user":
-        raise ValueError("Agent interrupt kind 必须是 ask_user")
+def _build_ask_human_interrupt(
+    interrupt_payload: dict[str, Any], *, thread_id: str, run_id: str
+) -> AskHumanPayload:
+    """构建关联会话与来源 Run 的提问载荷。"""
 
-    question = interrupt_value.get("question")
-    options = interrupt_value.get("options")
-    if not isinstance(question, str) or not question.strip():
-        raise ValueError("ask_user question 不能为空")
-    if (
-        not isinstance(options, list)
-        or not options
-        or not all(
-            isinstance(option, str) and bool(option.strip())
-            for option in options
-        )
-    ):
-        raise ValueError("ask_user options 必须是非空字符串列表")
+    questions = parse_interrupt_questions(interrupt_payload.get("questions"))
 
-    return {
-        "kind": "ask_user",
-        "question": question.strip(),
-        "options": [option.strip() for option in options],
-    }
+    if not questions:
+        questions = [
+            {
+                "question_id": "continue_confirmation",
+                "question": "接下来是否继续？",
+                "options": [
+                    {"label": "继续", "value": "continue"},
+                    {"label": "暂不继续", "value": "pause"},
+                ],
+            }
+        ]
+
+    return AskHumanPayload(thread_id=thread_id, run_id=run_id, questions=questions)
+
+
+def _format_interrupt_payload(interrupt_value: Any) -> dict[str, Any]:
+    """将打断的原生信息format化为标准化的payload，后续可以根据不同的interrupt类型做不同的处理"""
+
+    # 原生抽取的内容如果是字典就直接返回，如果是其他类型就尝试从value字段中抽取
+    if isinstance(interrupt_value, dict):
+        return interrupt_value
+
+    interrupt_payload = getattr(interrupt_value, "value", None)
+    # value={
+    #                     "kind": "ask_user",
+    #                     "tool": "choose_environment",
+    #                     "question": "请选择部署环境",
+    #                     "options": ["本地", "云端"],
+    # },
+    if isinstance(interrupt_payload, dict):
+        # HIL middleware会直接返回字典，因此直接搞了，agent没接入milddleware,
+        # 这里暂时处理不处理HIL的打断
+        return interrupt_payload
+
+    # 如果也没，直接手动构建，之前v2有这个问题
+    result: dict[str, Any] = {}
+
+    # 多个工具下的样式为
+    # 'questions': [
+    #                         {
+    #                             'question_id': 'drink_type',
+    #                             'question': '下午你想喝哪一类饮品？',
+    #                             'options': [
+    #                                 {
+    #                                     'label': '咖啡（提神）',
+    #                                     'value': 'coffee'
+    #                                 },
+    #                                 {
+    #                                     'label': '茶（清爽）',
+    #                                     'value': 'tea'
+    #                                 },
+    #                                 {
+    #                                     'label': '无咖啡因／甜饮',
+    #                                     'value': 'no_caffeine'
+    #                                 }
+    #                             ]
+    #                         }
+    questions = getattr(interrupt_value, "questions", None)
+
+    if isinstance(questions, list):
+        result["questions"] = questions
+
+    return result
+
+
+def build_agent_interrupt_message(
+    interrupt_value: Any, *, thread_id: str, run_id: str
+) -> dict[str, Any]:
+    """将 AskHuman 实体转换为事件和线程详情使用的字典。"""
+    interrupt_payload = _format_interrupt_payload(interrupt_value)
+    ask_human = _build_ask_human_interrupt(
+        interrupt_payload, thread_id=thread_id, run_id=run_id
+    )
+    return {"status": "ask_human", "interrupt_payload": ask_human.model_dump()}
+
+
+def _reslove_agent_interrupt(agent_state) -> Any | None:
+    # lc-v3 消息写一下，tasks和interrupts下都有消息拿，直接从tasks拿，形如
+    # tasks=(PregelTask 这种，先处理单个task的情况，后续有多个task再处理
+    if hasattr(agent_state, "tasks") and agent_state.tasks:
+        for task in agent_state.tasks:
+            if hasattr(task, "interrupts") and task.interrupts:
+                return task.interrupts[0]
+    return None
 
 
 # FIXEME: interrupt 只从 checkpoint StateSnapshot.interrupts 判断。
 async def check_agent_interrupt_handler(
     *,
     agent_instance: BaseAgent,
-    context: Any,
-) -> dict[str, Any] | None:
+    runtime_metadata,
+    chunk_iterator,
+    context,
+) -> AsyncIterator[bytes]:
+
+    # 此处封装下state的获取逻辑，可能涉及到多个interrupt工具
     graph = await agent_instance.get_agent(context)
-    state = await graph.aget_state(
+    agent_state = await graph.aget_state(
         {
             "configurable": {
                 "thread_id": context.thread_id,
@@ -946,20 +1095,27 @@ async def check_agent_interrupt_handler(
             }
         }
     )
-    interrupts = tuple(state.interrupts or ())
-    if not interrupts:
-        return None
-    if len(interrupts) != 1:
-        raise ValueError("第一版只支持单个 ask_user interrupt")
-    return build_agent_interrupt_message(interrupts[0].value)
+    if interrupt_value := _reslove_agent_interrupt(agent_state):
+        pending_interrupt = build_agent_interrupt_message(
+            interrupt_value,
+            thread_id=context.thread_id,
+            run_id=context.run_id,
+        )
+        status = pending_interrupt.pop("status")
+        runtime_metadata["interrupt"] = pending_interrupt
+        yield chunk_iterator(
+            status=status,
+            pending_interrupt=pending_interrupt,
+            runtime_metadata=runtime_metadata,
+        )
 
 
-# FIXEME: 两个 Thread Service 入口共用 v3 事件到内部 chunk 的适配逻辑。
 async def _stream_agent_event_chunks(
     *,
     stream_events: AsyncIterator[Any],
     thread_id: str,
     make_event: Callable[..., bytes],
+    accumulated_msg: list[str],
 ) -> AsyncIterator[bytes]:
     last_agent_state = ""
     message_ids: dict[tuple[str, str], str] = {}
@@ -981,9 +1137,7 @@ async def _stream_agent_event_chunks(
                 status="agent_execute_event",
                 event=payload,
                 namespace=(
-                    payload.get("stream_namesapce")
-                    if isinstance(payload, dict)
-                    else []
+                    payload.get("stream_namesapce") if isinstance(payload, dict) else []
                 ),
             )
             continue
@@ -1004,6 +1158,8 @@ async def _stream_agent_event_chunks(
                 if standard_stream_event.get("type") == "message_delta"
                 else ""
             )
+            if content:
+                accumulated_msg.append(content)
             yield make_event(
                 status="loading",
                 content=content,
@@ -1056,6 +1212,7 @@ async def stream_agent_response(
         )
 
     query = thread_input_message.content
+
     image_content = thread_input_message.image_content
     human_msg: HumanMessage = thread_input_message.langchain_msg
     agent_item, agent_instance = await _build_agent_runtime(
@@ -1083,6 +1240,8 @@ async def stream_agent_response(
     )
     agent_context = agent_instance.agent_context()
     agent_context.update_context(agent_runtime_context)
+    accumulated_msg: list[str] = []
+    lc_accumulated_msg = None
 
     try:
         await _check_conv_status(
@@ -1099,6 +1258,7 @@ async def stream_agent_response(
             stream_events=stream_events,
             thread_id=thread_id,
             make_event=make_agent_stream_event,
+            accumulated_msg=accumulated_msg,
         ):
             yield chunk
 
@@ -1109,28 +1269,49 @@ async def stream_agent_response(
             agent_instance=agent_instance,
             db=db,
         )
-        interrupt_payload = await check_agent_interrupt_handler(
+
+        # 打断系统，interrupt 隶属于 正常的异常
+        interrupted = False
+        interrupt_message = None
+        interrupt_type = None
+        async for interrupt_chunk in check_agent_interrupt_handler(
             agent_instance=agent_instance,
+            runtime_metadata=runtime_metadata,
+            chunk_iterator=make_agent_stream_event,
             context=agent_context,
-        )
-        if interrupt_payload is not None:
-            yield make_agent_stream_event(
-                status="interrupted",
-                interrupt=interrupt_payload,
+        ):
+            interrupted = True
+            interrupt_type, interrupt_message = _reslove_interrupt_state(
+                interrupt_chunk
             )
-            return
+            yield chunk
 
         yield make_agent_stream_event(
             status="finished",
             runtime_metadata=runtime_metadata,
         )
-    except Exception as exc:
-        logger.exception("Agent stream 响应失败")
-        # FIXEME: 普通 Run 只负责把执行异常转换为内部 error chunk。
+    except Exception as e:
+        logger.exception("Agent stream 失败")
+
+        if not lc_accumulated_msg and accumulated_msg:
+            lc_accumulated_msg = AIMessage(content="\n".join(accumulated_msg))
+
+        async with postgres_manager.get_async_session_context() as db:
+            await save_interrupt_message(
+                db=db,
+                thread_id=thread_id,
+                uid=current_user.uid,
+                accumulated_msg=lc_accumulated_msg,
+                error=str(e),
+                error_type=type(e).__name__,
+                agent_run_id=run_id,
+                request_id=runtime_metadata.get("request_id"),
+            )
+
         yield make_agent_stream_event(
             status="error",
-            error=str(exc),
-            error_type=type(exc).__name__,
+            error=str(e),
+            error_type=type(e).__name__,
         )
         return
 

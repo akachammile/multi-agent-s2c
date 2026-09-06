@@ -2,14 +2,75 @@
 
 ## 1. Context and Scope
 
-第一版用顶层 `LeaderAgent` 的单个 `ask_user(question: str, options: list[str])` 工具打通
-可恢复的单选提问。工具调用 LangGraph `interrupt()` 后，当前 Run 结束为 `interrupted`；
-用户提交所选 answer 时，后端创建新的 Resume Run，并从同一 Thread checkpoint 继续。
+顶层 `LeaderAgent` 的工具参数采用 `ask_user(questions: list[HumanQuestion])`：一次工具
+调用包含多个独立的单选问题，通过一次 LangGraph `interrupt()` 暂停并等待回答。
 
-本能力不包含自由文本或表单回答、多选、多问题聚合、SubAgent 提问、超时和多人回答，也不接入
-`HumanInTheLoopMiddleware` 或工具审批。取消仍按 [`cancellation`](../cancellation/spec.md)
-执行，与可恢复打断保持独立。Resume 使用独立入口函数，但不复制 Agent 构造、事件适配或
-checkpoint 保存循环。
+本次变更覆盖工具参数 Schema、原生中断载荷、工具返回值与独立的问题解析函数。下文 RUN-HIL-001 至
+RUN-HIL-005 等 Run/HTTP 合同仍是单问题 `question/options/answer`，Thread Service、
+Worker、恢复校验与前端尚未适配新的 `questions` 载荷；工具级验证不代表多问题业务链路已可用。
+
+本次不包含自由文本、多选、多个并行工具中断的业务处理、SubAgent 提问、超时和多人回答，
+也不接入 `HumanInTheLoopMiddleware` 或工具审批。取消仍按
+[`cancellation`](../cancellation/spec.md) 执行，与可恢复打断保持独立。
+
+### 工具参数与原生中断载荷
+
+`src/agents/leaderagent/tools.py` 拥有 `QuestionOption`、`HumanQuestion` 和 `ask_user`：
+
+- `QuestionOption` 包含 `label: str`（展示文字）与 `value: str`（回答值）。
+- `HumanQuestion` 包含 `question_id: str`、`question: str` 与
+  `options: list[QuestionOption]`；问题标识、问题文字和选项由模型生成。
+- Pydantic 类型与 `Field(description=...)` 生成模型可见的嵌套工具 Schema。
+  问题标识唯一性是描述约定，解析函数不检查内部字段或集合唯一性。
+- `ask_user` 将每个问题 `model_dump()` 后写入一次中断，不自行生成问题、选项或默认答案。
+
+原生 `Interrupt.value` 示例：
+
+```json
+{
+  "kind": "ask_user",
+  "questions": [
+    {
+      "question_id": "database",
+      "question": "请选择数据库",
+      "options": [{"label": "PostgreSQL", "value": "postgresql"}]
+    },
+    {
+      "question_id": "environment",
+      "question": "请选择部署环境",
+      "options": [{"label": "本地部署", "value": "local"}]
+    }
+  ]
+}
+```
+
+调用方应以 `{"database": "postgresql", "environment": "local"}` 这样的
+`question_id -> option.value` 字典恢复中断。工具原样返回恢复值，不再调用 `str()`；
+回答字段及选项合法性由后续恢复入口适配负责，本次工具不新增回答验证。
+
+工具级证据由 `test/test_ask_user_tool.py` 验证：模型 Schema 包含嵌套字段说明；真实内存
+checkpoint 中只有一个 interrupt，包含两道完整问题；按 ID 恢复后，原工具调用的
+ToolMessage 保留两道问题各自的答案。
+
+### 问题载荷解析
+
+`server/utils/interrupt_utils.py` 提供普通函数 `parse_interrupt_questions(questions)`：
+列表原样返回，单个问题字典包装为列表，其他类型抛出 `ValueError`。
+这里的字典是包含 `question_id`、`question`、`options` 的单个问题，不是整个 Interrupt.value。
+函数只统一外层结构，不检查内部字段、选项、空集合或重复标识，也不修改原始内容。
+函数由 Thread Service 的 AskHuman 构建函数调用；恢复入口适配仍待完成。
+`test/test_interrupt_utils.py` 覆盖列表直返、单问题多选项包装与不支持的输入类型。
+
+### 服务端 AskHuman 实体
+
+`server/utils/interrupt_utils.py` 中的 `AskHumanPayload` 使用普通 dataclass，包含
+`thread_id`、`run_id`、`questions` 和默认值为 `ask_user` 的 `kind`，不增加字段验证。
+`thread_id` 表示所属会话，`run_id` 表示产生中断的执行；恢复时新 Run 的
+`parent_run_id` 指向该 Run，同一会话可以经历多次 Run 和中断。
+`_build_ask_human_interrupt` 由调用方显式传入两个 ID，返回实体，不能采用模型载荷里的 ID。
+问题为空时沿用通用确认问题。`build_agent_interrupt_message` 将实体转换为字典供事件链路使用。
+实时中断入口传入 context 的 thread_id/run_id；线程详情重建待回答问题时传入持久化 Run 的
+thread_id/id，并保留 parent_run_id。多问题的恢复入口与前端适配尚未完成。
 
 ## 2. State Model
 

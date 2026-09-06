@@ -306,12 +306,16 @@ class ConversationRepository:
         *,
         thread_id: str,
         user_id: str,
-        agent_run_id: str,
         content: str,
         role: str,
+        agent_run_id: str | None = None,
+        request_id: str | None = None,
+        image_content: str | None = None,
+        message_type: str = "text",
+        status: str = "completed",
         msg_metadata: dict | None = None,
     ) -> Message:
-        """按用户和 Thread ID 添加 Agent 输出消息。"""
+        """按用户和 Thread ID 添加消息，透传全部可写业务字段。"""
         conversation = await self.get_conversation_by_thread_id_for_user(
             thread_id=thread_id,
             user_id=user_id,
@@ -324,6 +328,10 @@ class ConversationRepository:
             agent_run_id=agent_run_id,
             role=role,
             content=content,
+            request_id=request_id,
+            image_content=image_content,
+            message_type=message_type,
+            status=status,
             msg_metadata=msg_metadata,
         )
 

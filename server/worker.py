@@ -36,7 +36,7 @@ if sys.platform == "win32":
 
 
 @dataclass
-class AgentRunContext:
+class AgentRunController:
     """持有单个 Agent Run 的进程内取消监听状态。"""
 
     run_id: str
@@ -82,6 +82,9 @@ class AgentRunContext:
             return True
 
         if await has_agent_run_cancel_signal(self.run_id):
+            return True
+
+        if await _pending_run_cancel(self.run_id):
             return True
 
         agent_run = await _get_agent_run(self.run_id)
@@ -206,11 +209,11 @@ async def _get_agent_run(run_id: str):
 async def _cancellable_stream(
     stream: AsyncIterator[tuple[str, Any]],
     *,
-    run_context: AgentRunContext,
+    run_controller: AgentRunController,
 ) -> AsyncIterator[tuple[str, Any]]:
     """逐条消费 Agent 流，并等待 Run Context 的取消信号。"""
     while True:
-        cancel_task = asyncio.create_task(run_context.wait_cancel_signal())
+        cancel_task = asyncio.create_task(run_controller.wait_cancel_signal())
         stream_task = asyncio.create_task(anext(stream))
         done, _ = await asyncio.wait(
             {stream_task, cancel_task},
@@ -515,8 +518,8 @@ async def process_agent_run(ctx, run_id: str):
     if running_status in AGENT_RUN_TERMINAL_STATUSES:
         return {"run_id": run_id, "status": running_status}
 
-    run_context = AgentRunContext(run_id)
-    run_context.start()
+    run_controller = AgentRunController(run_id)
+    run_controller.start()
     try:
         await write_stream_event(
             run_id,
@@ -554,7 +557,7 @@ async def process_agent_run(ctx, run_id: str):
 
                 async for steam_agent_chunk in _cancellable_stream(
                     stream_thread_events,
-                    run_context=run_context,
+                    run_controller=run_controller,
                 ):
                     for strem_agent_chunk in _normalize_steam_agent_chunk(
                         steam_agent_chunk  # ty: ignore[invalid-argument-type]
@@ -569,6 +572,7 @@ async def process_agent_run(ctx, run_id: str):
                             current_thread_id,
                             strem_agent_chunk,
                         )
+
                         status = strem_agent_chunk.get("status") or "some_event"
 
 
@@ -595,6 +599,12 @@ async def process_agent_run(ctx, run_id: str):
                                         payload,
                                         current_thread_id,
                                     )
+
+                            # 这里判断是否已经暂停了
+                            if await run_controller.is_cancelled():
+                                raise asyncio.CancelledError(f"当前 Agent run： {run_id}已取消")
+                                
+
                             elif status == "interrupted":
                                 interrupt_payload = strem_agent_chunk.get("interrupt")
                                 if not isinstance(interrupt_payload, dict):
@@ -676,7 +686,7 @@ async def process_agent_run(ctx, run_id: str):
 
             # FIXEME: 无终态 status 时先由 Run Context 判定是否为取消。
             if not terminal_flag:
-                if run_context.is_cancelled():
+                if run_controller.is_cancelled():
                     raise asyncio.CancelledError(f"run {run_id} cancelled")
                 
                 finished_payload = {"status": "finished", "request_id": request_id}
@@ -719,7 +729,7 @@ async def process_agent_run(ctx, run_id: str):
             logger.exception(f"Agent run 执行失败：{run_id}")
             raise
     finally:
-        await run_context.close()
+        await run_controller.close()
 
 
 

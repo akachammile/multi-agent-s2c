@@ -168,6 +168,20 @@ Agent Stream 正常结束
 消息保存失败时不得发出 `finished`。异常继续传播给现有 Worker 失败处理，不增加新的
 终态分支。
 
+### RUN-MP-009 Message creation fields
+
+`ConversationRepository.add_message_by_thread_id` 通过 `thread_id` 和 `user_id`
+查询未删除的会话，并将其内部 ID 用作 `Message.conversation_id`；查不到时抛出
+`LookupError`。
+
+该方法显式接收并向 `_create_message` 传递全部可写业务字段：`role`、`content`、
+`agent_run_id`、`request_id`、`image_content`、`message_type`、`status` 和
+`msg_metadata`。`agent_run_id`、`request_id` 和 `image_content` 默认 `None`，
+`message_type` 默认 `text`，`status` 默认 `completed`，未提供元数据时保存空字典。
+
+`id`、`created_at` 和 `updated_at` 使用模型的自动生成规则；ORM 关系字段通过对应的
+仓储方法维护。创建消息只 `flush`，事务仍由调用方提交。
+
 ## 5. Acceptance Criteria
 
 - 父方法通过 `aget_state` 读取 `checkpoint.values["messages"]` 并按 `type` 分发；
@@ -181,4 +195,5 @@ Agent Stream 正常结束
 - Run 结果通过 `output_message_id` 读取；
 - 保持 Conversation -> Message -> ToolCall 的物理删除级联；
 - 消息事务提交完成后才允许产生 `finished`；
+- 按 Thread 创建消息时，调用方提供的全部可写业务字段进入同一条 Message；
 - 未增加 fallback、幂等、Redis、SSE 或前端行为。

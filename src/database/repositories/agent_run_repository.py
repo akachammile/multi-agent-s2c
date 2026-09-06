@@ -208,6 +208,13 @@ class AgentRunRepository:
         )
         return result.scalar_one_or_none()
 
+    async def lock_for_output_update(self, run_id: str) -> AgentRun | None:
+        """锁定当前 Run 以便更新输出 Message ID。"""
+        run = await self._lock_update(run_id)
+        if run is None:
+            return None
+        return run
+        
     # FIXEME: 锁定父 Run 后，Resume 创建与重复请求判断必须处于同一事务。
     async def get_for_resume_for_update(
         self,
