@@ -10,6 +10,7 @@ import type {
   AgentSummary,
   ThreadDetailResponse,
   ThreadListResponse,
+  ThreadSummaryResponse,
   ThreadResponse
 } from "@/types/chat"
 
@@ -33,6 +34,19 @@ export const listThreads = (
     requiresAuth: true
   })
 }
+
+export const renameThread = async (threadId: string, title: string): Promise<ThreadSummaryResponse> => {
+  const response = await apiClient.apiFetch(`/api/chat/thread/${encodeURIComponent(threadId)}`, {
+    method: "PATCH",
+    requiresAuth: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title })
+  })
+  return response.json()
+}
+
+export const deleteThread = (threadId: string) =>
+  apiClient.apiDelete(`/api/chat/thread/${encodeURIComponent(threadId)}`, { requiresAuth: true })
 
 export const createThread = (agentId: string) =>
   apiClient.apiPost<ThreadResponse, { agent_id: string }>(

@@ -24,6 +24,7 @@ import { Dropdown as ADropdown, Menu as AMenu, MenuItem as AMenuItem, Tooltip as
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router"
 
 import logoUrl from "@/assets/logo.svg"
+import ChatHistoryComponent from "@/components/ChatHistoryComponent.vue"
 import ProfileComponent from "@/components/ProfileComponent.vue"
 import SearchChatComponent from "@/components/SearchChatComponent.vue"
 import SettingsComponent from "@/components/SettingsComponent.vue"
@@ -274,7 +275,14 @@ const logout = async () => {
           </div>
         </nav>
 
-        <div class="min-h-0 flex-1" />
+        <div
+          v-if="authStore.accessToken"
+          v-show="!sidebarCollapsed || isNarrowViewport"
+          class="flex min-h-0 flex-1 flex-col"
+        >
+          <ChatHistoryComponent />
+        </div>
+        <div v-if="!authStore.accessToken || (sidebarCollapsed && !isNarrowViewport)" class="min-h-0 flex-1" />
 
         <footer class="grid gap-px px-1.5 pt-1 pb-3">
           <ATooltip v-if="sidebarCollapsed && !isNarrowViewport" placement="right" title="Search (Cmd+K)">
