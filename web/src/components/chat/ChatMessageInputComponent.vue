@@ -173,7 +173,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
       </li>
     </TransitionGroup>
 
-    <div class="grid w-full grid-cols-[auto_auto_minmax(0,1fr)_auto] items-end gap-2">
+    <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto_auto] items-end gap-2">
       <input ref="fileInput" class="hidden" type="file" multiple tabindex="-1" @change="handleFileInput">
 
       <ChatActionMenuComponent
@@ -181,26 +181,27 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
         :placement="actionMenuPlacement" @select-attachment="fileInput?.click()"
       />
 
-      <ChatModelSelectComponent
-        :class="multiline ? 'col-start-2 row-start-2' : 'col-start-2 row-start-1'"
-        :model-value="modelId"
-        :models="models"
-        :loading="modelsLoading"
-        :disabled="disabled || running"
-        :placement="actionMenuPlacement"
-        @update:model-value="emit('update:modelId', $event)"
-      />
 
       <div
         ref="editor"
         class="min-h-10 min-w-0 overflow-y-auto whitespace-pre-wrap break-words px-2 py-2 text-[0.95rem] leading-6 text-graphite outline-none empty:before:pointer-events-none empty:before:text-slate/70 empty:before:content-['Ask_anything']"
         :class="{
           'col-span-4 col-start-1 row-start-1 max-h-[180px]': multiline,
-          'col-start-3 row-start-1 max-h-10': !multiline,
+          'col-start-2 row-start-1 max-h-10': !multiline,
           'cursor-not-allowed opacity-60': disabled
         }" :contenteditable="disabled ? 'false' : 'plaintext-only'" role="textbox" aria-label="Message"
         aria-multiline="true" @compositionstart="composing = true" @compositionend="composing = false"
         @input="updateValue" @keydown="handleKeydown" @paste="handlePaste"
+      />
+
+      <ChatModelSelectComponent
+        :class="multiline ? 'col-start-3 row-start-2' : 'col-start-3 row-start-1'"
+        :model-value="modelId"
+        :models="models"
+        :loading="modelsLoading"
+        :disabled="disabled || running"
+        :placement="actionMenuPlacement"
+        @update:model-value="emit('update:modelId', $event)"
       />
 
       <ATooltip placement="top" :title="running ? 'Cancel' : 'Send'">

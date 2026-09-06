@@ -27,10 +27,16 @@ Provider config 生成，并通过 Redis read-through cache 提供。
 
 ### CHAT-MODEL-003 Composer selector
 
-`ChatModelSelectComponent` 显示当前模型的 icon、`display_name` 和 `version`，展开后列出
-`/api/models` 返回的真实模型。模型目录加载、默认选择和当前选择状态由 `useModelStore`
-持有，`ChatView` 只消费 Store；模型目录加载中、无可用模型或
-当前 Run 活跃时不允许切换。
+`ChatModelSelectComponent` 内嵌于发送按钮左侧，触发器仅显示当前模型所属厂商的 SVG 图标，不显示名称或版本，悬停提示具体型号。
+未选中或无匹配品牌图标时显示中性图标，不冒用其他厂商品牌。菜单使用 Noto Sans SC。
+点击后仅显示约 192px 的实心六扇区圆盘，包含千问、DeepSeek、MiniMax、Gemini、OpenAI、智谱。
+一级只显示品牌 SVG，扇区填满圆盘，不留中心孔；一级与二级均使用原生鼠标，不隐藏、模拟或锁定指针。
+点击家族或键盘 Enter 后才切换到该家的二级型号列表；列表仅显示型号名称，无 Provider 小字。
+点击具体型号才提交选择，提供返回一级菜单按钮。没有配置型号时显示空状态，不虚构可用模型。
+悬停扇区只高亮，点击展开二级；正常滚动列表并点击型号完成选择。
+不使用全屏鼠标遮罩，不显示锁定或失焦技术提示。Esc、外部点击、窗口失焦、禁用和卸载都清理菜单。
+触摸和键盘保留普通点击及方向键操作。
+默认无阴影，hover 可轻微阴影，尊重减少动画设置。运行期间禁用选择器。
 
 ### CHAT-MODEL-004 Run integration
 
