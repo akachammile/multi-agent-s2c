@@ -13,16 +13,60 @@ from src.configs import config as sys_config
 from src.storage import get_async_redis_client
 from src.utils import logger
 
-MODEL_CATALOG_CACHE_KEY = "model:catalog:v1"
+MODEL_CATALOG_CACHE_KEY = "model:catalog:v2"
 MODEL_CATALOG_CACHE_TTL_SECONDS = 3600
+PROVIDER_CATALOG_CACHE_KEY = "model:providers:v2:user:{user_id}"
+PROVIDER_CATALOG_CACHE_TTL_SECONDS = 3600
 
-_SUPPORTED_CHAT_PROVIDERS = frozenset({"dashscope", "deepseek", "openai"})
+
+def _provider_cache_key(user_id: int) -> str:
+    if type(user_id) is not int or user_id <= 0:
+        raise ValueError("必须提供有效的用户 ID")
+    return PROVIDER_CATALOG_CACHE_KEY.format(user_id=user_id)
+
+
+async def get_provider_catalog_cache(user_id: int) -> list[dict[str, Any]] | None:
+    """读取数据库管理能力的公开目录；数据合同由 Service 校验。"""
+    redis = await get_async_redis_client()
+    raw = await redis.get(_provider_cache_key(user_id))
+    if raw is None:
+        return None
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return None
+    return payload if isinstance(payload, list) else None
+
+
+async def set_provider_catalog_cache(user_id: int, catalog: list[dict[str, Any]]) -> None:
+    redis = await get_async_redis_client()
+    await redis.set(
+        _provider_cache_key(user_id),
+        json.dumps(catalog, ensure_ascii=False, allow_nan=False),
+        ex=PROVIDER_CATALOG_CACHE_TTL_SECONDS,
+    )
+
+
+async def invalidate_provider_catalog_cache(user_id: int) -> None:
+    redis = await get_async_redis_client()
+    await redis.delete(_provider_cache_key(user_id))
+
+_SUPPORTED_CHAT_PROVIDERS = frozenset({
+    "dashscope", "openai", "deepseek", "qwen", "glm", "minomax",
+    "gemini", "chatgpt", "ollama", "vllm",
+})
 
 _MODEL_FAMILIES = (
     ("deepseek", "DeepSeek", "deepseek"),
     ("gemini", "Gemini", "gemini"),
     ("qwen", "Qwen", "qwen"),
+    ("glm", "GLM", "zhipu"),
+    ("minimax", "MiniMax", "minimax"),
+    ("minomax", "MiniMax", "minimax"),
+    ("chatgpt", "ChatGPT", "openai"),
     ("gpt", "GPT", "openai"),
+    ("ollama", "Ollama", "ollama"),
+    ("vllm", "vLLM", "vllm"),
 )
 
 
@@ -54,6 +98,10 @@ def _model_presentation(
                 if token
             )
             return display_name, version or model_name, icon
+
+    for prefix, display_name, icon in _MODEL_FAMILIES:
+        if provider_name == prefix:
+            return display_name, model_name, icon
 
     display_name = provider_name.replace("_", " ").title()
     return display_name, model_name, provider_name.lower()
@@ -94,7 +142,7 @@ def build_model_catalog() -> dict[str, Any]:
 
 
 def is_model_available(model_id: str) -> bool:
-    """判断 model ID 是否存在且可由当前 ChatModel loader 构造。"""
+    """判断模型是否已配置且所属厂商在目录支持范围内；不进行连接探测。"""
     return any(
         provider_name in _SUPPORTED_CHAT_PROVIDERS
         and model_id == f"{provider_name}/{model_name}"

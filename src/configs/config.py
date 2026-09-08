@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +47,7 @@ class Config(BaseSettings):
     model_location: str = Field(default="./model", description="本地模型存放目录")
 
     # ---------- 模型 ----------
+    model_credential_key: SecretStr = Field(default=SecretStr(""), repr=False, description="模型凭据加密密钥，独立于 JWT")
     default_model: str = Field(
         default="dashscope/qwen3.8-max", description="默认使用的模型名称"
     )

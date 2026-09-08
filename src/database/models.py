@@ -14,6 +14,28 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from .base import Base
+from .credential_types import EncryptedCredential, EncryptedHeaders
+
+
+class ModelProvider(Base):
+    """用户独立的聊天模型供应商配置。"""
+
+    __tablename__ = "model_provider"
+
+    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
+    provider_id = Column(String(64), primary_key=True)
+    name = Column(String(255), nullable=False)
+    base_url = Column(Text, nullable=False)
+    protocol = Column(String(32), nullable=False)
+    api_key = Column(EncryptedCredential(), nullable=False, default="")
+    extra_headers = Column(EncryptedHeaders(), nullable=False, default=dict)
+    is_enabled = Column(Boolean, nullable=False, default=True)
+    enabled_models = Column(JSON, nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False,
+        server_default=func.now(), onupdate=func.now(),
+    )
 
 
 class User(Base):

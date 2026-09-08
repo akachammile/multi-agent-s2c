@@ -9,6 +9,7 @@ from .knowledge_repository import (
     KnowledgeRepository,
 )
 from .message_attachment_repository import MessageAttachmentRepository
+from .model_repository import ModelRepository
 from .user_repository import UserRepository
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "KnowledgeFileRepository",
     "KnowledgeRepository",
     "MessageAttachmentRepository",
+    "ModelRepository",
     "UserRepository",
 ]
