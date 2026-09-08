@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { Component } from "vue"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
-import { Database, Info, Settings, User, X } from "@lucide/vue"
+import { Box, Database, Info, Settings, User, X } from "@lucide/vue"
 import { RouterLink } from "vue-router"
 
 import type { UserResponse } from "@/types/auth"
+import SettingsModelsComponent from "@/components/SettingsModelsComponent.vue"
 
-type SettingsSectionId = "general" | "account" | "data" | "about"
+type SettingsSectionId = "general" | "account" | "models" | "data" | "about"
 
 interface SettingsSection {
   id: SettingsSectionId
@@ -26,6 +27,7 @@ const emit = defineEmits<{
 const sections: SettingsSection[] = [
   { id: "general", label: "General", icon: Settings },
   { id: "account", label: "Account", icon: User },
+  { id: "models", label: "Models", icon: Box },
   { id: "data", label: "Data Controls", icon: Database },
   { id: "about", label: "About", icon: Info }
 ]
@@ -83,7 +85,8 @@ onBeforeUnmount(() => {
         @mousedown.self="close"
       >
         <section
-          class="flex h-[min(92dvh,760px)] w-full flex-col overflow-hidden rounded-t-lg bg-paper text-graphite min-[768px]:h-[min(640px,calc(100dvh_-_48px))] min-[768px]:max-w-[860px] min-[768px]:rounded-lg"
+          class="flex h-[min(92dvh,760px)] w-full flex-col overflow-hidden rounded-t-lg bg-paper text-graphite min-[768px]:rounded-lg"
+          :class="activeSection === 'models' ? 'min-[768px]:h-[min(680px,calc(100dvh_-_48px))] min-[768px]:max-w-[1120px]' : 'min-[768px]:h-[min(640px,calc(100dvh_-_48px))] min-[768px]:max-w-[860px]'"
           role="dialog"
           aria-modal="true"
           aria-labelledby="settings-title"
@@ -108,9 +111,9 @@ onBeforeUnmount(() => {
             </button>
           </header>
 
-          <div class="grid min-h-0 flex-1 [grid-template-rows:auto_minmax(0,1fr)] min-[768px]:grid-rows-1 min-[768px]:[grid-template-columns:minmax(150px,2fr)_minmax(0,8fr)]">
+          <div class="grid min-h-0 flex-1 [grid-template-rows:auto_minmax(0,1fr)] min-[768px]:grid-rows-1 min-[768px]:grid-cols-[168px_minmax(0,1fr)]">
             <nav
-              class="flex min-w-0 gap-0.5 overflow-x-auto border-b border-graphite/6 px-3 py-2 min-[768px]:h-full min-[768px]:flex-col min-[768px]:overflow-y-auto min-[768px]:border-b-0 min-[768px]:border-r min-[768px]:border-graphite/6"
+              class="flex min-w-0 gap-0.5 overflow-x-auto px-3 py-2 min-[768px]:h-full min-[768px]:flex-col min-[768px]:overflow-y-auto"
               aria-label="Settings sections"
               role="tablist"
             >
@@ -118,8 +121,8 @@ onBeforeUnmount(() => {
                 v-for="section in sections"
                 :id="`settings-tab-${section.id}`"
                 :key="section.id"
-                class="flex min-h-8 shrink-0 items-center gap-2 rounded-sm bg-transparent px-2.5 text-left text-[0.88rem] font-normal text-slate transition-colors duration-150 hover:bg-mist hover:text-graphite motion-reduce:transition-none min-[768px]:w-full min-[768px]:min-h-9"
-                :class="{ 'font-semibold text-graphite': activeSection === section.id }"
+                class="flex min-h-8 shrink-0 items-center gap-2 rounded-sm px-2.5 text-left text-[0.88rem] transition-colors duration-150 hover:bg-mist hover:text-graphite motion-reduce:transition-none min-[768px]:w-full min-[768px]:min-h-9"
+                :class="activeSection === section.id ? 'bg-graphite/5 font-semibold text-graphite' : 'bg-transparent font-normal text-slate'"
                 type="button"
                 role="tab"
                 :aria-controls="`settings-section-${section.id}`"
@@ -141,8 +144,11 @@ onBeforeUnmount(() => {
               class="h-full min-h-0 min-w-0 overflow-y-auto bg-paper px-4 pt-4 pb-6 min-[768px]:px-7 min-[768px]:pt-5 min-[768px]:pb-7"
               aria-live="polite"
             >
+              <section v-if="activeSection === 'models'" id="settings-section-models" class="h-full min-h-0" role="tabpanel" aria-labelledby="settings-tab-models">
+                <SettingsModelsComponent />
+              </section>
               <section
-                v-if="activeSection === 'general'"
+                v-else-if="activeSection === 'general'"
                 id="settings-section-general"
                 class="grid min-w-0 gap-5"
                 role="tabpanel"

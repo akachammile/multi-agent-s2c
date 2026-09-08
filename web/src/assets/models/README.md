@@ -12,3 +12,8 @@
 - [gemini-color](https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/gemini-color.svg)
 - [openai](https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/openai.svg)
 - [zhipu-color](https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/zhipu-color.svg)
+
+Settings 补充：
+- [vllm-color](https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/vllm-color.svg)，保留上游配色。
+- [ollama](https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/ollama.svg)，保存为 `ollama-color.svg`，按界面要求将单色填充调整为紫色 `#7066B8`，属于本地着色版本。
+- `chatgpt-color.svg` 复用 `openai.svg` 路径，将填充调整为绿色 `#10A37F`。
