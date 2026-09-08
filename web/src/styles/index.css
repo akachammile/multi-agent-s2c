@@ -189,6 +189,25 @@
   color: var(--color-slate);
 }
 
+/* Knowledge 自定义空状态覆盖 antd 的默认图片高度、SVG 拉伸与外边距。 */
+.knowledge-chat-empty.ant-empty,
+.knowledge-file-list-empty.ant-empty {
+  margin: 0;
+}
+
+.knowledge-chat-empty.ant-empty {
+  margin-inline: auto;
+}
+
+:is(.knowledge-chat-empty, .knowledge-file-list-empty).ant-empty .ant-empty-image {
+  height: auto;
+  margin-bottom: 0.9rem;
+}
+
+:is(.knowledge-chat-empty, .knowledge-file-list-empty).ant-empty .ant-empty-image svg {
+  height: auto;
+}
+
 /* 文件列表:去掉 antd List 默认行距 */
 .ant-list-items {
   display: grid;
@@ -256,7 +275,7 @@
 }
 
 /* 上传拖拽区:统一 48px 高度与虚线框 */
-.knowledge-file-add .ant-upload-drag {
+.knowledge-file-add.ant-upload-wrapper .ant-upload-drag {
   box-sizing: border-box;
   height: 48px;
   min-height: 48px;
@@ -271,8 +290,8 @@
     background-color 140ms ease;
 }
 
-.knowledge-file-add .ant-upload-drag:hover,
-.knowledge-file-add .ant-upload-drag-hover {
+.knowledge-file-add.ant-upload-wrapper .ant-upload-drag:not(.ant-upload-disabled):hover,
+.knowledge-file-add.ant-upload-wrapper .ant-upload-drag-hover {
   border-color: color-mix(
     in srgb,
     var(--color-graphite) 22%,
@@ -281,9 +300,14 @@
   background: color-mix(in srgb, var(--color-graphite) 6%, var(--color-paper));
 }
 
-.knowledge-file-add .ant-upload-btn {
+.knowledge-file-add.ant-upload-wrapper .ant-upload-drag .ant-upload-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0 0.65rem;
+}
+
+.knowledge-file-add.ant-upload-wrapper .ant-upload-drag-container {
+  display: block;
+  min-width: 0;
 }

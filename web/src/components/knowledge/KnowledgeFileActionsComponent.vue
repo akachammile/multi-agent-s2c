@@ -122,7 +122,7 @@ function openTool(label: string) {
         </h2>
         <AButton
           v-if="props.presentation === 'panel'"
-          class="knowledge-panel-collapse grid! shrink-0 place-items-center h-10! min-w-10! w-10! p-0! text-slate! hover:bg-graphite/8! hover:text-graphite! focus-visible:bg-graphite/8! focus-visible:text-graphite! max-[720px]:hidden"
+          class="knowledge-panel-collapse grid! shrink-0 place-items-center h-10! min-w-10! w-10! p-0! text-slate! hover:bg-graphite/8! hover:text-graphite! focus-visible:bg-graphite/8! focus-visible:text-graphite! max-[720px]:hidden!"
           type="text"
           shape="circle"
           :aria-label="props.collapsed ? 'Expand tools' : 'Collapse tools'"
@@ -132,7 +132,7 @@ function openTool(label: string) {
           @click="emit('toggle-collapse')"
         >
           <span
-            class="grid place-items-center h-[18px] w-[18px] [&_svg]:block [&_svg]:h-[18px] [&_svg]:w-[18px]"
+            class="grid! place-items-center h-[18px] w-[18px] [&_svg]:block [&_svg]:h-[18px] [&_svg]:w-[18px]"
             aria-hidden="true"
           >
             <PanelRightOpen
@@ -170,7 +170,7 @@ function openTool(label: string) {
         }"
       >
         <div
-          class="grid content-start overflow-y-auto overscroll-contain min-w-0 min-h-0 p-4 [grid-template-columns:repeat(3,minmax(0,1fr))] [grid-auto-rows:74px] gap-2"
+          class="grid content-start overflow-y-auto overscroll-contain min-w-0 min-h-0 p-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,104px),1fr))] [grid-auto-rows:74px] gap-2"
         >
           <KnowledgeToolComponent
             v-for="tool in tools"

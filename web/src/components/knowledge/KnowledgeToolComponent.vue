@@ -27,7 +27,7 @@ const emit = defineEmits<{
     }"
     @click="emit('activate')"
   >
-    <span class="flex min-w-0 flex-col items-start justify-center gap-0.5 p-0">
+    <span class="flex! min-w-0 flex-col items-start justify-center gap-1 p-0 text-left">
       <span class="grid h-[18px] w-[18px] shrink-0 place-items-center [&>svg]:block" aria-hidden="true">
         <component
           :is="props.icon"

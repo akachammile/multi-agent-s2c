@@ -171,7 +171,7 @@ function submitSearch() {
         </h2>
         <AButton
           v-if="props.presentation === 'panel'"
-          class="knowledge-panel-collapse grid! h-10! w-10! min-w-10! shrink-0 place-items-center p-0! text-slate! hover:bg-graphite/8! hover:text-graphite! focus-visible:bg-graphite/8! focus-visible:text-graphite! max-[720px]:hidden"
+          class="knowledge-panel-collapse grid! h-10! w-10! min-w-10! shrink-0 place-items-center p-0! text-slate! hover:bg-graphite/8! hover:text-graphite! focus-visible:bg-graphite/8! focus-visible:text-graphite! max-[720px]:hidden!"
           type="text"
           shape="circle"
           :aria-label="props.collapsed ? 'Expand files' : 'Collapse files'"
@@ -180,7 +180,7 @@ function submitSearch() {
           :title="props.collapsed ? 'Expand files' : 'Collapse files'"
           @click="emit('toggle-collapse')"
         >
-          <span class="grid h-[18px] w-[18px] place-items-center" aria-hidden="true">
+          <span class="grid! h-[18px] w-[18px] place-items-center" aria-hidden="true">
             <PanelLeftOpen
               v-if="props.collapsed"
               :size="18"
@@ -207,7 +207,7 @@ function submitSearch() {
 
       <div
         id="knowledge-files-body"
-        class="grid min-h-0 min-w-0 gap-[0.8rem] p-[0.9rem] [grid-template-rows:auto_auto_minmax(0,1fr)] motion-reduce:transition-none"
+        class="grid min-h-0 min-w-0 gap-3 p-4 [grid-template-rows:auto_auto_minmax(0,1fr)] motion-reduce:transition-none"
         :class="{
           'opacity-100 visible transition-opacity duration-140 delay-100':
             !(props.presentation === 'panel' && props.collapsed),

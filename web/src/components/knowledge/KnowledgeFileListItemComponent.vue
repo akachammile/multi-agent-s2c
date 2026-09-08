@@ -37,7 +37,7 @@ const emit = defineEmits<{
 
       <span class="min-w-0">
         <strong
-          class="overflow-hidden text-ellipsis whitespace-nowrap font-medium"
+          class="block truncate font-medium"
           :title="props.file.name"
         >
           {{ props.file.name }}

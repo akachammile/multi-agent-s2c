@@ -44,7 +44,7 @@ const handleKeydown = (event: KeyboardEvent) => {
     @submit.prevent="submitQuestion"
   >
     <div
-      class="grid items-end gap-2 rounded-[16px] border border-graphite/16 bg-mist py-[0.45rem] pr-2 pl-[0.8rem] [grid-template-columns:minmax(0,1fr)_auto] focus-within:border-graphite/22"
+      class="grid items-center gap-2 rounded-[16px] border border-graphite/16 bg-mist py-[0.45rem] pr-2 pl-[0.8rem] [grid-template-columns:minmax(0,1fr)_auto] focus-within:border-graphite/22"
     >
       <ATextarea
         v-model:value="draft"
@@ -59,7 +59,7 @@ const handleKeydown = (event: KeyboardEvent) => {
       <ATooltip
         :title="props.enabled ? 'Send' : 'Unavailable'"
       >
-        <span class="inline-grid">
+        <span class="inline-grid self-end">
           <AButton
             class="knowledge-composer-submit grid! h-11! w-11! min-w-11! place-items-center border-graphite! bg-graphite! text-paper! shadow-none! enabled:hover:border-graphite/86! enabled:hover:bg-graphite/86! disabled:border-graphite/10! disabled:bg-graphite/6! disabled:text-graphite/58!"
             type="primary"

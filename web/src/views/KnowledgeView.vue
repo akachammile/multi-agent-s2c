@@ -231,7 +231,7 @@ function removeFile(fileId: string) {
             </span>
             <span
               class="truncate text-sm font-semibold text-graphite transition-opacity duration-150"
-              :class="isRailHovered ? 'opacity-100' : 'opacity-0 pointer-events-none w-0'"
+              :class="isRailHovered ? 'opacity-100' : 'hidden'"
             >
               AM
             </span>
@@ -265,7 +265,7 @@ function removeFile(fileId: string) {
             </span>
             <span
               class="truncate transition-opacity duration-150"
-              :class="isRailHovered ? 'opacity-100' : 'opacity-0 pointer-events-none w-0'"
+              :class="isRailHovered ? 'opacity-100' : 'hidden'"
             >
               {{ item.label }}
             </span>
@@ -295,7 +295,7 @@ function removeFile(fileId: string) {
             </span>
             <span
               class="truncate transition-opacity duration-150"
-              :class="isRailHovered ? 'opacity-100' : 'opacity-0 pointer-events-none w-0'"
+              :class="isRailHovered ? 'opacity-100' : 'hidden'"
             >
               Back to Home
             </span>
@@ -318,7 +318,7 @@ function removeFile(fileId: string) {
       <!-- Knowledge Workspace (3 Panels) -->
       <main
         ref="knowledgeView"
-        class="grid h-full w-full min-h-0 min-w-0 overflow-hidden gap-3 bg-mist p-3 text-sm text-graphite [grid-template-rows:minmax(0,1fr)] [grid-template-areas:'files_chat_actions'] max-[720px]:overflow-y-auto max-[720px]:grid-cols-[minmax(0,1fr)] max-[720px]:[grid-template-areas:'chat'_'files'_'actions'] max-[720px]:grid-rows-none max-[720px]:[grid-auto-rows:calc(100dvh_-_32px)]"
+        class="grid flex-1 w-full min-h-0 min-w-0 overflow-hidden gap-3 bg-mist p-3 text-sm text-graphite [grid-template-rows:minmax(0,1fr)] [grid-template-areas:'files_chat_actions'] max-[720px]:overflow-y-auto max-[720px]:grid-cols-[minmax(0,1fr)] max-[720px]:[grid-template-areas:'chat'_'files'_'actions'] max-[720px]:grid-rows-none max-[720px]:[grid-auto-rows:calc(100dvh_-_92px)]"
         :class="{
           '[grid-template-columns:minmax(0,1fr)_minmax(0,1.92fr)_minmax(0,1fr)]':
             !filesCollapsed && !toolsCollapsed,
