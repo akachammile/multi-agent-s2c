@@ -2,6 +2,7 @@
 
 import json
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -36,13 +37,37 @@ class ModelCatalogTest(unittest.TestCase):
         self.assertEqual("V4 Pro", by_id["deepseek/deepseek-v4-pro"]["version"])
         self.assertEqual("4o Mini", by_id["openai/gpt-4o-mini"]["version"])
 
-    def test_marks_only_loader_supported_models_available(self):
+    def test_marks_configured_supported_providers_available(self):
         catalog = model_cache.build_model_catalog()
         by_id = {model["id"]: model for model in catalog["models"]}
 
         self.assertTrue(by_id["dashscope/qwen3.8-max"]["is_available"])
-        self.assertFalse(by_id["gemini/gemini-3-pro"]["is_available"])
-        self.assertFalse(model_cache.is_model_available("gemini/gemini-3-pro"))
+        self.assertTrue(by_id["gemini/gemini-3-pro"]["is_available"])
+        self.assertTrue(model_cache.is_model_available("gemini/gemini-3-pro"))
+        self.assertFalse(model_cache.is_model_available("gemini/not-configured"))
+
+    def test_requested_providers_and_unknown_provider(self):
+        names = ["deepseek", "qwen", "glm", "minomax", "gemini", "chatgpt", "ollama", "vllm", "unknown"]
+        providers = {name: SimpleNamespace(model_list=["org/model:tag"]) for name in names}
+        with patch.object(model_cache, "DEFAULT_BASE_MODEL_PROVIER", providers):
+            catalog = model_cache.build_model_catalog()
+            for model in catalog["models"]:
+                with self.subTest(provider=model["provider"]):
+                    expected = model["provider"] != "unknown"
+                    self.assertEqual(expected, model["is_available"])
+                    self.assertEqual(expected, model_cache.is_model_available(model["id"]))
+
+    def test_added_family_names_and_local_provider_fallbacks(self):
+        cases = [
+            ("glm-4", "glm", ("GLM", "4", "zhipu")),
+            ("MiniMax-M2", "minomax", ("MiniMax", "M2", "minimax")),
+            ("chatgpt-4o", "chatgpt", ("ChatGPT", "4o", "openai")),
+            ("custom-model", "ollama", ("Ollama", "custom-model", "ollama")),
+            ("org/custom-model", "vllm", ("vLLM", "org/custom-model", "vllm")),
+        ]
+        for model, provider, expected in cases:
+            with self.subTest(model=model, provider=provider):
+                self.assertEqual(expected, model_cache._model_presentation(model, provider))
 
 
 class ModelCacheTest(unittest.IsolatedAsyncioTestCase):
