@@ -5,9 +5,8 @@
 顶层 `LeaderAgent` 的工具参数采用 `ask_user(questions: list[HumanQuestion])`：一次工具
 调用包含多个独立的单选问题，通过一次 LangGraph `interrupt()` 暂停并等待回答。
 
-本次变更覆盖工具参数 Schema、原生中断载荷、工具返回值与独立的问题解析函数。下文 RUN-HIL-001 至
-RUN-HIL-005 等 Run/HTTP 合同仍是单问题 `question/options/answer`，Thread Service、
-Worker、恢复校验与前端尚未适配新的 `questions` 载荷；工具级验证不代表多问题业务链路已可用。
+当前目标覆盖多问题展示、回答提交、Resume Run 创建、Worker 传参以及恢复流的完整收尾。
+本文是目标契约；当前根目录 plan.md 为待确认设计，生产代码尚未完成适配。
 
 本次不包含自由文本、多选、多个并行工具中断的业务处理、SubAgent 提问、超时和多人回答，
 也不接入 `HumanInTheLoopMiddleware` 或工具审批。取消仍按
@@ -46,7 +45,7 @@ Worker、恢复校验与前端尚未适配新的 `questions` 载荷；工具级�
 
 调用方应以 `{"database": "postgresql", "environment": "local"}` 这样的
 `question_id -> option.value` 字典恢复中断。工具原样返回恢复值，不再调用 `str()`；
-回答字段及选项合法性由后续恢复入口适配负责，本次工具不新增回答验证。
+回答字段及选项合法性由 Run Service 在创建恢复 Run 前验证。
 
 工具级证据由 `test/test_ask_user_tool.py` 验证：模型 Schema 包含嵌套字段说明；真实内存
 checkpoint 中只有一个 interrupt，包含两道完整问题；按 ID 恢复后，原工具调用的
@@ -58,7 +57,7 @@ ToolMessage 保留两道问题各自的答案。
 列表原样返回，单个问题字典包装为列表，其他类型抛出 `ValueError`。
 这里的字典是包含 `question_id`、`question`、`options` 的单个问题，不是整个 Interrupt.value。
 函数只统一外层结构，不检查内部字段、选项、空集合或重复标识，也不修改原始内容。
-函数由 Thread Service 的 AskHuman 构建函数调用；恢复入口适配仍待完成。
+函数由 Thread Service 的 AskHuman 构建函数调用。
 `test/test_interrupt_utils.py` 覆盖列表直返、单问题多选项包装与不支持的输入类型。
 
 ### 服务端 AskHuman 实体
@@ -68,9 +67,9 @@ ToolMessage 保留两道问题各自的答案。
 `thread_id` 表示所属会话，`run_id` 表示产生中断的执行；恢复时新 Run 的
 `parent_run_id` 指向该 Run，同一会话可以经历多次 Run 和中断。
 `_build_ask_human_interrupt` 由调用方显式传入两个 ID，返回实体，不能采用模型载荷里的 ID。
-问题为空时沿用通用确认问题。`build_agent_interrupt_message` 将实体转换为字典供事件链路使用。
+问题为空时拒绝该中断，不生成默认确认问题。`build_agent_interrupt_message` 将实体转换为字典供事件链路使用。
 实时中断入口传入 context 的 thread_id/run_id；线程详情重建待回答问题时传入持久化 Run 的
-thread_id/id，并保留 parent_run_id。多问题的恢复入口与前端适配尚未完成。
+thread_id/id，并保留 parent_run_id。实时事件和刷新恢复使用相同 questions 结构。
 
 ## 2. State Model
 
@@ -101,8 +100,7 @@ Worker 把 LangGraph interrupt 规范化后写入父 Run 的 `run_metadata`：
 {
   "interrupt": {
     "kind": "ask_user",
-    "question": "请选择继续执行所使用的数据库",
-    "options": ["PostgreSQL", "MySQL"]
+    "questions": [{"question_id": "database", "question": "请选择数据库", "options": [{"label": "PostgreSQL", "value": "postgresql"}]}]
   }
 }
 ```
@@ -120,7 +118,7 @@ Resume Run 保存前端提交的 Run metadata：
   "parent_run_id": "<interrupted-run-id>",
   "run_metadata": {
     "resume": {
-      "answer": "用户回答"
+      "answers": {"database": "postgresql"}
     }
   }
 }
@@ -141,7 +139,7 @@ POST /api/agent/runs/{interrupted_run_id}/resume
   "thread_metadata": {
     "request_id": "<client-idempotency-key>",
     "resume": {
-      "answer": "请使用 PostgreSQL"
+      "answers": {"database": "postgresql"}
     }
   }
 }
@@ -173,9 +171,9 @@ POST /api/agent/runs/{interrupted_run_id}/resume
 
 1. 父 Run 属于当前用户和请求 Thread；
 2. 父 Run 状态为 `interrupted`；
-3. `thread_metadata.resume.answer` 是父 Run `run_metadata.interrupt.options` 中的一个值；
+3. `thread_metadata.resume.answers` 是非空的 `question_id -> option.value` 字典；键集合必须与父 Run 的 questions 完全一致，每个值必须属于对应问题的 options；问题 ID 重复或问题结构无效时拒绝恢复；
 4. 父 Run 尚无 Resume 子 Run；
-5. 相同 `thread_metadata.request_id` 重试返回已有子 Run，其他重复恢复返回 `409`。
+5. 相同 `thread_metadata.request_id` 且 answers 相同的重试返回已有子 Run；相同键不同回答或其他重复恢复返回 `409`。
 
 ### RUN-HIL-005 Interrupt detection
 
@@ -187,12 +185,12 @@ LangGraph 在 `interrupt()` 暂停图时把打断信息写入 checkpoint。当�
 打断检测封装为同文件内的异步 `check_agent_interrupt_handler`：函数根据当前
 Agent context 获取 graph，调用 `graph.aget_state(config)`，读取 `state.interrupts`，并把
 `Interrupt.value` 交给 `build_agent_interrupt_message`，按 ask_user 工具合同构造
-`kind/question/options` payload。
+`kind/questions` payload。
 
 第一版只接受单个 `ask_user` interrupt：无 interrupt 返回 `None`；单个合法 interrupt 返回
 builder 构造的 payload；多个 interrupt、非字典 value、错误 kind、空 question 或空/非法
-options 必须抛出明确异常，不得当作“未打断”继续发送 `finished`。builder 不生成 answer；
-answer 只在 Resume 请求中出现。
+options 必须抛出明确异常，不得当作“未打断”继续发送 `finished`。每个问题须有唯一 question_id、非空 question 和有效 label/value 选项。
+builder 不生成回答；answers 只在 Resume 请求中出现。
 
 普通或 Resume graph stream 结束后，对应 Thread Service 入口必须先保存 checkpoint 消息，
 再调用该函数。普通入口使用其内部的 `make_agent_stream_event`，Resume 入口使用其内部的
@@ -289,14 +287,21 @@ metadata 中是否存在 `interrupt` 猜测运行类型。
 
 Worker 把新 Run 的 `run_metadata` 加入 `runtime_metadata`。恢复分支调用与
 `stream_agent_response` 同在 `server/service/thread_service.py` 的
-`resume_agent_response`；该函数只校验/提取当前回答并构造：
+`resume_agent_response`；Worker 从持久化的 `run_metadata.resume.answers` 提取
+`resume_input`，显式传给恢复入口。恢复入口构造：
 
 ```python
-Command(resume=runtime_metadata["resume"]["answer"])
+Command(resume=resume_input)
 ```
 
 随后 `resume_agent_response` 把该 Command 交给
 `BaseAgent.stream_message_by_resume`，不再调用 `stream_agent_response`。
+恢复入口显式接收 resume_input、thread_id、runtime_metadata、current_user 和 db，不接收 agent_slug。
+当前中断只发生在主 Agent；恢复入口通过 `agent_manager.get_agent("LeaderAgent")` 获取主 Agent，
+不按 slug 选择执行实例。父 Run 的 agent_id 仍用于持久化关联。
+resume_input 是已校验的回答字典；runtime_metadata 承载运行身份与配置，入口不再从中提取回答。
+模型配置沿用父 Run 的 model（若未指定则保持既有默认解析规则），前端回答不能更换 Agent 或模型。
+恢复入口仍负责运行上下文、会话校验、流事件转换、累计输出、消息保存、再次中断检测和异常处理。
 `stream_message_by_resume` 与 `stream_messages_with_event` 使用相同 Agent context、
 configurable config 和 v3 event 输出合同，但只接受 `Command(resume=...)`，不得包装为
 `{"messages": ...}`，也不得创建或重放 HumanMessage。
@@ -322,8 +327,7 @@ AIMessage、ToolMessage 或 ToolCall。
   "payload": {
     "kind": "ask_user",
     "parent_run_id": "<interrupted-run-id>",
-    "question": "请选择继续执行所使用的数据库",
-    "options": ["PostgreSQL", "MySQL"]
+    "questions": [{"question_id": "database", "question": "请选择数据库", "options": [{"label": "PostgreSQL", "value": "postgresql"}]}]
   }
 }
 ```
@@ -338,6 +342,8 @@ PostgreSQL 继续拥有 Run 状态和 interrupt metadata。
 响应中的新 Run ID 和 Stream URL。
 `ChatView` 组合 `ChatAskUserComponent`；问题、选项和回答不伪造成普通聊天消息，也不写入
 `localStorage`。现有 `ChatHumanaApproveComponent` 本轮不接线。
+组件按 questions 展示每道题并收集 answers，全部作答后一次提交；选项展示 label、提交 value。
+这是一份 interrupt 的多个问题答案，不是 LangGraph 多个 interrupt ID 的恢复映射。
 
 ### RUN-HIL-011 Refresh recovery
 
@@ -355,7 +361,7 @@ pending_interaction: InteractionRequired | null
 
 - 父 Run 不存在或不属于当前用户：`404`；
 - 状态或 Thread 不匹配：`409`；
-- `thread_metadata.resume` 无效，或 answer 不在父 Run 的 options 中：`422`；
+- `thread_metadata.resume.answers` 无效、漏答、多余问题或值不在对应 options 中：`422`；
 - 不同 `thread_metadata.request_id` 重复恢复同一父 Run：`409`；
 - Redis 发布失败：PostgreSQL 状态和 metadata 保持有效，读取侧按数据库收敛；
 - Resume Run 执行中取消：沿用现有 `cancel_requested -> cancelled`。
@@ -368,7 +374,7 @@ pending_interaction: InteractionRequired | null
 - `resume_agent_response` 准备 Resume Command 并调用 `stream_message_by_resume`，不委托
   `stream_agent_response`；
   `check_agent_interrupt_handler` 独立获取 state，并通过 `build_agent_interrupt_message`
-  构造 question/options；
+  构造 questions；
   普通入口内部使用 `make_agent_stream_event`，Resume 入口内部使用
   `make_agent_resume_event`，两者 yield 相同字段合同的 interrupted chunk；
   `process_agent_run` 按 chunk status 调用统一 `_finalize_run`，并等待 stream 自然耗尽；
